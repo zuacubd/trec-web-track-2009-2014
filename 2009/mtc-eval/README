@@ -1,0 +1,67 @@
+This is code for calculating the expectation of average precision as well as the confidence that a difference in average precision exists given an incomplete set of relevance judgments.  It implements work described in:
+Carterette, B., Allan, J., and Sitaraman, R.  Minimal Test Collections for Retrieval Evaluation.  In Proceedings of SIGIR, pp268--275, 2006.
+Carterette, B.  Robust Test Collections for Retrieval Evaluation.  In Proceedings of SIGIR, pp8-15, 2007.
+
+This is research code, and as such is not particularly user-friendly or robust.  It may crash with no error message.  It may have bugs.  If you have any problems, please write me (Ben Carterette) at carteret@cs.umass.edu. 
+
+COMPILING
+=========
+You will need the GNU Scientific Library to compile the code.  It can be downloaded from http://www.gnu.org/software/gsl.
+
+This distribution has source for two programs:  "expert" and "evaluate".  These are described in more detail below.  To compile, simply type "make", or to compile one or the other:
+make expert
+make evaluate
+
+In case the compile fails, I have included statically-linked binaries compiled with gcc 3.4.4 under linux 2.6.12.
+
+RUNNING
+=======
+Both programs read in a qrels or qrels-like file and one or more retrieval run results.  They both understand either the traditional 4-column TREC qrels (qid, Q0, docid, rel) or the 5-column Million Query Track "prels" format (qid, docid, rel, alg, prob).  Run results must be in 6-column format.
+
+"expert" reads in a 5-column 1MQ prels file and a set of retrieval runs and outputs a probability of relevance for each unjudged document retrieved by the input systems.  Usage is
+	expert -5 -q <prels> -d <directory containing runs>
+
+The -5 flag indicates that the prels file is in 1MQ 5-column format.  If not given, it will assume traditional 4-column format.  
+
+"expert" will attempt to process everything in the specified directory as a retrieval run; anything that turns out to not be a retrieval run will be skipped, but beware of things that "look like" retrieval runs.
+
+After training the model, it will print to stdout a TREC-like 4-column file:
+<topic number> Q0 <docno> <probability>
+Each line is a retrieved document with no judgment in the qrels file and the probability that it is relevant.
+
+"evaluate" reads in a qrels file, one or more retrieval runs, and a probability file such as the one produced by "expert".  Usage is one of:
+	evaluate [-5] [-o 2] -q <prels> -p <expert.output> -r1 <run>
+	evaluate [-5] [-o 2] -q <prels> -p <expert.output> -r1 <run> -r2 <run>
+	evaluate [-5] [-o 2] -q <prels> -p <expert.output> -d <directory containing runs>
+
+Again, the -5 flag specifies that the prels file is in 5-column Million Query Track format.  expert.output is the output of the 'exerpt' program described above.
+
+The -o flag can be used to calculate a lower-order variance approximation.  -o 3 calculates exact variance, which is O(n^3).  -o 2 uses an O(n^2) upper bound to approximate variance.  There is currently no O(n) approximation, so -o 2 and -o 3 are the only options.
+
+The first example only evaluates a single run, printing out nothing but the expected MAP.  This is not particularly interesting on its own.
+
+The second compares two runs, printing the expected difference in AP, the variance in the difference, and the probability that the difference is less than 0 for each topic, as well as over all topics.
+
+The third compares all runs in the given directory, outputing the mean, variance, and confidence for every pair of systems and every topic.
+
+All the individual topic stats are printed to stderr, but the final stats over all topics are printed to stdout.
+
+If no expert output is specified, a uniform probability of relevance will be used for all unjudged documents.
+
+WARNINGS
+========
+"expert" has memory requirements of O(n*T*S), where n is the number of documents, T the number of topics, and S the number of systems.  Running it with 24 systems over 1631 topics down to rank 100 takes up about 700MB of RAM.  This can definitely be improved, and will be in a future version.
+
+"evaluate" is not so memory-intensive, but has a time bottleneck in the variance computation:  variance in delta-AP for a single topic is O(n^3) for one pair of systems, where n is the number of unique documents retrieved by the two systems.  Thus for S systems and T topics, "evaluate" runs in O(S^2*T*n^3) time.  Evaluating 24 systems over 1631 topics down to rank 100 took a little over 2 hours on my 2GHz single-processor Pentium.  Note that it can be parallelized, though:  pairs of systems can be processed independently, and in fact individual topics or sets of topics can be processed independently (though you will need to recalculate Edelta-MAP, Vdelta-MAP, and P(delta-MAP < 0) on your own).
+
+Because of the time and space constraints, I've hardcoded it to only go down to depth 100 in the ranked lists.  You may change this if you dare; it is the #define MAXRANK in def.h.
+
+I have also implemented an O(n^2) variance upper bound in "evaluate".  The same 24 systems over 1631 topics to rank 100 took about 15 minutes with the O(n^2) approximation, and the resulting confidences were not too far off the "true" confidences (MSE \approx 0.06).
+
+NOTES
+=====
+I have recycled some code from Chris Buckley's trec_eval into this distribution.
+
+The hashtable code (hashtable*) is from Christopher Clark at the University of Cambridge.
+
+All other code is by Ben Carterette (carteret@cs.umass.edu).

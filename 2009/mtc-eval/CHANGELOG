@@ -1,0 +1,2 @@
+v.6 - evaluate.c modified so that evaluating a subset of runs would produce the same results as evaluating all runs
+v.5 - first release version
